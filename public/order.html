@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>点菜中</title>
+<style>
+  :root{
+    --bg:#f5f6f4; --card:#ffffff; --border:#e2e0d8; --text:#2c2c2a; --sub:#6b6a63;
+    --accent:#3b6d11; --accent-bg:#eaf3de; --accent-text:#173404; --danger:#a32d2d;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:0 0 110px;}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 20px;position:sticky;top:0;z-index:10;}
+  .header-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  header h1{margin:0;font-size:16px;font-weight:600;}
+  .room-tag{font-size:12px;background:var(--accent-bg);color:var(--accent-text);padding:4px 10px;border-radius:20px;font-weight:600;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
+  .presence{font-size:12px;color:var(--sub);margin-top:6px;}
+  .search{width:100%;margin-top:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fbfaf7;}
+  .conn-status{font-size:11px;padding:2px 8px;border-radius:10px;margin-left:6px;}
+  .conn-ok{background:var(--accent-bg);color:var(--accent-text);}
+  .conn-bad{background:#fcebeb;color:var(--danger);}
+  main{max-width:640px;margin:0 auto;padding:12px 14px;}
+  .category{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;}
+  .category summary{list-style:none;cursor:pointer;padding:12px 16px;font-weight:600;font-size:15px;display:flex;justify-content:space-between;align-items:center;background:#faf9f5;}
+  .category summary::-webkit-details-marker{display:none;}
+  .category summary .count{font-size:12px;font-weight:400;color:var(--sub);}
+  .item{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border);gap:8px;}
+  .item.hidden{display:none;}
+  .item-main{flex:1;min-width:0;}
+  .item-name{font-size:14px;}
+  .item-breakdown{font-size:11px;color:var(--sub);margin-top:2px;}
+  .item-price{font-size:13px;color:var(--sub);white-space:nowrap;margin-right:8px;}
+  .item select{font-size:13px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);margin-right:8px;max-width:120px;}
+  .stepper{display:flex;align-items:center;gap:6px;}
+  .stepper button{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:#fff;font-size:15px;line-height:1;cursor:pointer;color:var(--text);}
+  .stepper button:active{transform:scale(0.94);}
+  .stepper .qty{width:20px;text-align:center;font-size:14px;font-weight:600;}
+  .footer-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -2px 8px rgba(0,0,0,0.05);padding:10px 20px;}
+  .footer-inner{display:flex;align-items:center;justify-content:space-between;max-width:640px;margin:0 auto;}
+  .total-label{font-size:12px;color:var(--sub);}
+  .total-value{font-size:22px;font-weight:700;color:var(--accent-text);}
+  .total-count{font-size:12px;color:var(--sub);margin-left:6px;}
+  .footer-actions{display:flex;gap:8px;}
+  .footer-actions button{border:1px solid var(--border);background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;}
+  .clear-btn{color:var(--danger);}
+  .export-btn{color:var(--accent-text);}
+  .summary-btn{color:var(--accent-text);}
+  .summary-panel{background:var(--accent-bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:var(--accent-text);}
+  .summary-panel .empty{color:var(--sub);}
+  .summary-row{display:flex;justify-content:space-between;padding:2px 0;}
+  .people-panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:13px;}
+  .people-panel h3{margin:0 0 6px;font-size:13px;color:var(--sub);font-weight:600;}
+  .people-row{display:flex;justify-content:space-between;padding:3px 0;}
+
+  #nameModal{position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  #nameModal .box{background:#fff;border-radius:14px;padding:26px 22px;max-width:320px;width:100%;}
+  #nameModal h2{margin:0 0 6px;font-size:17px;}
+  #nameModal p{margin:0 0 16px;font-size:13px;color:var(--sub);}
+  #nameModal input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:14px;}
+  #nameModal button{width:100%;padding:11px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div id="exportModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;">
+  <div style="background:#fff;border-radius:14px;padding:22px;max-width:420px;width:100%;">
+    <h2 style="margin:0 0 6px;font-size:16px;">点菜清单</h2>
+    <p style="margin:0 0 10px;font-size:12px;color:var(--sub);" id="exportHint">已复制到剪贴板，可以直接粘贴发给大家</p>
+    <textarea id="exportText" readonly style="width:100%;height:220px;font-size:13px;padding:10px;border:1px solid var(--border);border-radius:8px;resize:vertical;font-family:inherit;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="exportCopyAgainBtn" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">再次复制</button>
+      <button id="exportCloseBtn" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="nameModal">
+  <div class="box">
+    <h2>你叫什么名字？</h2>
+    <p>方便大家看到是谁加的菜</p>
+    <input id="nameInput" placeholder="输入昵称，如：小明" maxlength="12">
+    <button id="nameConfirm">进入点菜</button>
+  </div>
+</div>
+
+<header>
+  <div class="header-top">
+    <div>
+      <h1 id="menuTitle">点菜中</h1>
+    </div>
+    <span class="room-tag" id="roomTag" title="点击复制房间链接">房间 ----</span>
+  </div>
+  <div class="presence">在线：<span id="presenceList">-</span><span class="conn-status conn-bad" id="connStatus">连接中</span></div>
+  <input class="search" id="search" type="text" placeholder="搜索菜名，如：牛肉、豆腐...">
+</header>
+
+<main>
+  <div class="people-panel" id="peoplePanel" style="display:none;">
+    <h3>按人汇总</h3>
+    <div id="peopleRows"></div>
+  </div>
+  <div class="summary-panel" id="summary">
+    <div class="empty">还没有点菜，点下方 + 号开始点菜吧</div>
+  </div>
+  <div id="menu"></div>
+</main>
+
+<div class="footer-bar">
+  <div class="footer-inner">
+    <div>
+      <span class="total-label">合计</span>
+      <span class="total-value" id="totalValue">¥0</span>
+      <span class="total-count" id="totalCount">共 0 件</span>
+    </div>
+    <div class="footer-actions">
+      <button class="export-btn" id="exportBtn">复制清单</button>
+      <button class="clear-btn" id="clearMineBtn">清空我的</button>
+    </div>
+  </div>
+</div>
+
+<script src="order.js"></script>
+</body>
+</html>

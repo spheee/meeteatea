@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多人点菜系统</title>
+<style>
+  *{box-sizing:border-box;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+    background:#f5f6f4; color:#2c2c2a; margin:0; min-height:100vh;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .card{
+    background:#fff; border:1px solid #e2e0d8; border-radius:14px;
+    padding:32px 28px; max-width:380px; width:100%;
+  }
+  h1{font-size:20px; margin:0 0 6px; text-align:center;}
+  .sub{font-size:13px; color:#6b6a63; text-align:center; margin:0 0 24px;}
+  label{display:block; font-size:12px; color:#6b6a63; margin-bottom:6px;}
+  select{
+    width:100%; padding:11px 12px; border:1px solid #e2e0d8; border-radius:8px;
+    font-size:15px; margin-bottom:16px; background:#fbfaf7; color:#2c2c2a;
+  }
+  button{
+    width:100%; padding:12px; border-radius:8px; border:none;
+    background:#3b6d11; color:#fff; font-size:15px; font-weight:600;
+    cursor:pointer; margin-bottom:12px;
+  }
+  button:active{transform:scale(0.98);}
+  button:disabled{opacity:0.6;}
+  .divider{display:flex; align-items:center; gap:10px; margin:18px 0; color:#a3a29b; font-size:12px;}
+  .divider::before, .divider::after{content:""; flex:1; height:1px; background:#e2e0d8;}
+  .join-row{display:flex; gap:8px;}
+  input{
+    flex:1; padding:11px 12px; border:1px solid #e2e0d8; border-radius:8px;
+    font-size:15px; text-transform:uppercase; letter-spacing:2px;
+  }
+  .join-row button{width:auto; padding:11px 18px; margin:0; background:#fff; color:#3b6d11; border:1px solid #3b6d11;}
+  .msg{font-size:12px; color:#a32d2d; margin-top:8px; min-height:16px; text-align:center;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>多人点菜</h1>
+  <p class="sub">选一份菜单，创建房间后把链接分享给同桌的人，大家实时同步点菜</p>
+
+  <label for="menuSelect">选择菜单</label>
+  <select id="menuSelect"><option>加载菜单中...</option></select>
+
+  <button id="createBtn">创建新房间</button>
+  <div class="divider">或加入已有房间</div>
+  <div class="join-row">
+    <input id="roomInput" placeholder="输入房间码" maxlength="8">
+    <button id="joinBtn">加入</button>
+  </div>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+// 当前页面本身就是部署在反代子路径下的（比如 /order/），用当前路径算出这个前缀，
+// 这样不管部署在 /order 还是别的路径下都不用改代码。
+const BASE = location.pathname.endsWith('/') ? location.pathname.slice(0, -1) : location.pathname;
+
+let menus = [];
+
+fetch(BASE + '/api/menus').then(r => r.json()).then(list => {
+  menus = list;
+  const sel = document.getElementById('menuSelect');
+  sel.innerHTML = list.map(m => `<option value="${m.id}">${m.name}（${m.itemCount}道）</option>`).join('');
+});
+
+document.getElementById('createBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('createBtn');
+  const menuId = document.getElementById('menuSelect').value;
+  btn.disabled = true; btn.textContent = '创建中...';
+  try {
+    const res = await fetch(BASE + '/api/room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ menuId })
+    });
+    const data = await res.json();
+    location.href = BASE + '/' + data.roomId;
+  } catch (e) {
+    document.getElementById('msg').textContent = '创建失败，请检查网络后重试';
+    btn.disabled = false; btn.textContent = '创建新房间';
+  }
+});
+
+async function join() {
+  const code = document.getElementById('roomInput').value.trim().toUpperCase();
+  const msg = document.getElementById('msg');
+  if (!code) { msg.textContent = '请输入房间码'; return; }
+  const res = await fetch(BASE + '/api/room/' + code);
+  const data = await res.json();
+  if (data.exists) {
+    location.href = BASE + '/' + code;
+  } else {
+    msg.textContent = '房间不存在，请确认房间码是否正确';
+  }
+}
+document.getElementById('joinBtn').addEventListener('click', join);
+document.getElementById('roomInput').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+</script>
+</body>
+</html>
