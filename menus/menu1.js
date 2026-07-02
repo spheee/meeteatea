@@ -1,6 +1,6 @@
 module.exports = {
   id: "menu1",
-  name: "示例·本帮菜馆",
+  name: "于记私房菜",
   categories: [
   {cat:"经典上海菜", items:[
     {n:"韭菜蛋饼", p:18},{n:"虾仁跑蛋", p:20},{n:"酱爆猪肝", p:24},

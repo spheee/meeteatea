@@ -1,6 +1,6 @@
 module.exports = {
   id: "menu2",
-  name: "示例·川菜小馆",
+  name: "测试数据",
   categories: [
     {cat:"凉菜", items:[
       {n:"口水鸡", p:32},{n:"夫妻肺片", p:36},{n:"拍黄瓜", p:12},

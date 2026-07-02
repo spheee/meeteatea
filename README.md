@@ -41,33 +41,53 @@ BASE_PATH=/dianca npm start
    pm2 save
    ```
 
-   也可以直接 `PORT=3000 node server.js` 或写成 systemd service。
+   也可以直接 `PORT=3000 node server.js` 前台跑（调试用）。
 
-4. **本系统默认挂载在 `/order` 子路径下**（不是站点根路径），所以 Nginx 只要把 `/order` 原样转发给它就行，**不要**做前缀 rewrite/strip。80 端口示例：
+4. **本系统默认挂载在 `/order` 子路径下**（不是站点根路径），所以 Nginx 只要把 `/order` 原样转发给它就行，**不要**做前缀 rewrite/strip。核心永远是这两段 `location`（完整可复制的独立站点版本见 [`deploy/nginx-order-system.conf`](./deploy/nginx-order-system.conf)）：
 
    ```nginx
-   server {
-       listen 80;
-       server_name yourdomain.com;   # 或者直接用服务器 IP
+   location /order/ {
+       proxy_pass http://127.0.0.1:3000;   # 注意：这里不要在末尾加路径，让 /order 原样透传
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+   }
 
-       location /order/ {
-           proxy_pass http://127.0.0.1:3000;   # 注意：这里不要在末尾加路径，让 /order 原样透传
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection "upgrade";
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       }
-
-       # 访问 /order（没有末尾斜杠）时跳转到 /order/，避免相对路径的静态资源加载失败
-       location = /order {
-           return 301 /order/;
-       }
+   # 访问 /order（没有末尾斜杠）时跳转到 /order/，避免相对路径的静态资源加载失败
+   location = /order {
+       return 301 /order/;
    }
    ```
 
-   配好后，直接访问 `http://yourdomain.com/order/`（或者 `http://服务器IP/order/`）就是首页。
+   怎么放这两段，看你服务器的情况：
+
+   **没有域名，只用 IP 访问 / 服务器上还没有别的站点（最简单，推荐）**
+
+   直接把这两段加进 Ubuntu 自带的默认站点 `/etc/nginx/sites-available/default`，加在它原有的 `server { listen 80 default_server; ... }` 块内部（跟它已有的 `location /` 平级），然后：
+
+   ```bash
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+   > **踩坑提醒**：如果你另外新建一个 `server { listen 80; }` 站点、又没设置 `server_name`，请求会被自带的 `default` 站点（带 `default_server` 标记）抢走，导致 `/order` 一直打不开或者显示别的页面。没有域名的情况下，最稳的做法就是直接改 `default` 站点，别新建。也可以反过来：`sudo rm /etc/nginx/sites-enabled/default`（只删软链接，不删源文件，随时可恢复）把默认站点禁用掉，只留你自己的站点。
+
+   **已经有域名，想单独建一个站点**
+
+   用 [`deploy/nginx-order-system.conf`](./deploy/nginx-order-system.conf) 这份完整配置，把里面的 `server_name` 换成你真实的域名，然后：
+
+   ```bash
+   sudo cp deploy/nginx-order-system.conf /etc/nginx/sites-available/order-system
+   sudo nano /etc/nginx/sites-available/order-system   # 改 server_name
+   sudo ln -s /etc/nginx/sites-available/order-system /etc/nginx/sites-enabled/
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+   配好后，访问 `http://yourdomain.com/order/`（或者 `http://服务器IP/order/`）就是首页。
 
    `WebSocket` 用的是同一个 `/order/ws` 路径，上面配置里的 `Upgrade`/`Connection` 两行就是专门保证 WebSocket 握手能通过 Nginx 转发，缺了会导致点菜页面一直显示"重连中"。
 
@@ -76,6 +96,17 @@ BASE_PATH=/dianca npm start
    如果你想换一个转发路径（不叫 `/order`），启动服务时改一下 `BASE_PATH` 环境变量，Nginx 里的 `location` 路径也同步改成一样的就行，前端代码不用动。
 
 5. 防火墙记得放行 80（或者你用的端口）。Node 应用本身跑在 3000 端口，只对内网/本机开放即可，不用暴露给公网，公网只暴露 Nginx 的 80/443。
+
+6. 之后每次改完代码 `git push`，服务器上拉最新代码、重启 pm2：
+
+   ```bash
+   cd /opt/order-system
+   git pull
+   npm install --production   # package.json 有变化时才需要，没变可以跳过
+   pm2 restart order-system
+   ```
+
+   看日志确认启动正常：`pm2 logs order-system`。
 
 ## 使用方式
 
@@ -95,6 +126,8 @@ order-system/
 │   ├── index.js          # 自动扫描本目录下所有菜单文件，不用改
 │   ├── menu1.js           # 示例菜单1
 │   └── menu2.js           # 示例菜单2
+├── deploy/              # 部署相关的现成配置文件，照抄改改就能用
+│   └── nginx-order-system.conf   # 独立站点版 Nginx 配置（有域名时用）
 ├── package.json
 ├── data/               # 每个房间一个 JSON 文件（自动生成，记录该房间用的菜单+点菜情况）
 └── public/
@@ -128,6 +161,12 @@ module.exports = {
 保存后重启服务（`npm start` 或 `pm2 restart order-system`），首页的"选择菜单"下拉框就会自动多出这一项，之后创建的房间就能选它了。已经开好的房间不受影响，仍然用创建时选的那份菜单。
 
 不想要某份示例菜单，直接删掉对应文件即可（比如删 `menus/menu2.js`）。
+
+## 常见问题
+
+- **配好 Nginx，访问 `/order` 还是打不开** —— 先 `sudo nginx -t` 看语法错没错；再看 `curl -i http://127.0.0.1:3000/order/` 本机直连 Node 服务通不通（不通说明是 Node 服务没启动或端口不对，跟 Nginx 无关）；如果直连没问题但走 Nginx 不行，大概率是被 `default_server` 站点抢走了请求，参考上面部署部分的踩坑提醒。
+- **点菜页面标题旁边一直显示"重连中"** —— WebSocket 没握手成功，检查 Nginx 配置里 `proxy_set_header Upgrade $http_upgrade;` 和 `proxy_set_header Connection "upgrade";` 这两行有没有漏。
+- **改了 `menus/` 里的菜单文件不生效** —— 菜单是启动时读一次，改完文件要 `pm2 restart order-system` 才会生效；已经创建的房间会一直用创建时那份菜单，不会跟着变。
 
 ## 已测试功能
 
