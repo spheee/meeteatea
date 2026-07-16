@@ -108,6 +108,28 @@ BASE_PATH=/dianca npm start
 
    看日志确认启动正常：`pm2 logs order-system`。
 
+## 重启 / 重新加载
+
+改代码、加菜单之后要不要重启，重启哪个，看你动了什么：
+
+**改了项目代码 / 加了新菜单文件（`menus/*.js`）—— 重启 pm2 管的 Node 进程：**
+
+```bash
+pm2 restart order-system
+pm2 logs order-system --lines 30   # 看一眼有没有报错
+```
+
+菜单是启动时读一次的，不重启不会生效；已经创建的房间不受影响，还是用创建时选的那份菜单。
+
+**改了 Nginx 配置文件（`/etc/nginx/sites-available/...`）—— 让 Nginx 重新读配置：**
+
+```bash
+sudo nginx -t                  # 先检查语法，有错误 reload 会失败
+sudo systemctl reload nginx    # 平滑重载，不会断开现有连接
+```
+
+日常加菜单、改业务代码不需要动 Nginx，只有改了反代/域名/证书这些配置才需要这一步。`reload` 和 `restart` 的区别：`reload` 是重新读配置不断连接，够用；`restart` 是整个进程重启，只有 Nginx 本身卡死才需要。
+
 ## 使用方式
 
 1. 任意一人打开首页（比如 `http://yourdomain.com/order/`），先在下拉框选这顿饭对应的餐厅菜单，再点"创建新房间"，得到一个类似 `/order/AB3K` 的链接和 4 位房间码
